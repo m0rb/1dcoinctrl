@@ -9,7 +9,8 @@ $|=1;
 
 use constant {
 	# where we live
-	SOUND_DIR => dirname(realpath($0)),
+	#SOUND_DIR => dirname(realpath($0)),
+	SOUND_DIR => "/var/lib/asterisk/sounds",
 
 	# outbound context we'll send calls to (since our current context should
 	# only allow dialing 6200 from the ATA)
@@ -20,16 +21,15 @@ use constant {
 	TIMEOUT => 10,
 
 	# timeout in seconds to wait to get a number or a coin
-	BUSY_TIMEOUT => 100,
+	BUSY_TIMEOUT => 10,
 
 	# amount required to make a call
 	CALL_CENTS => 25,
 
 	# numbers allowed to be dialed without requiring coins
 	FREE_CALLS => qr/^(1?(8[02345678]{2})[0-9]{7}|911)/,
-
 	# valid numbers which will immediately dial instead of timing out
-	VALID_NUMBER => qr/^(1?[2-8][0-9]{9}|911|5556[0-9]{3}|[2-9][0-9]{6}|[2-9][0-9]{9})/,
+	VALID_NUMBER => qr/^(1?[2-8][0-9]{9}|911|2600|5556[0-9]{3}|[2-9][0-9]{6}|[2-9][0-9]{9})/,
 };
 
 my $AGI = new Asterisk::AGI;
@@ -42,7 +42,7 @@ my $dialed = "";
 $AGI->verbose("Entered payphone.agi");
 # generate dialtone while we wait for coins
 sleep (1);
-$AGI->stream_file(SOUND_DIR . "/crossbar_connect_sound", "0");
+$AGI->exec("PLAYBACK", SOUND_DIR . "/crossbar_connect_sound");
 $AGI->exec("Playtones", "dial");
 my $dialtone = 1;
 
@@ -105,10 +105,10 @@ while (1) {
 			$AGI->verbose("need " . CALL_CENTS . " cents to dial " . $dialed
 				. ", have " . $inserted, 5);
 
-		if ($AGI->stream_file(SOUND_DIR . "/ACTS_Coin_Test", "\$") == ord('$')) {
+		if ($AGI->exec("PLAYBACK", SOUND_DIR . "/ACTS_Coin_Test", "\$") == ord('$')) {
 			$inserted += 5;
 		} else {
-		if ($AGI->stream_file(SOUND_DIR . "/ACTS_SBC_Operator_Assistance", "\$") == ord('$')) {
+		if ($AGI->exec("PLAYBACK", SOUND_DIR . "/ACTS_SBC_Operator_Assistance", "\$") == ord('$')) {
 			$inserted += 5;
 		} }
 
@@ -118,16 +118,16 @@ while (1) {
 				}
 			}
 
-			$AGI->stream_file(SOUND_DIR . "/not_deposited", "0");
+			$AGI->exec("PLAYBACK",SOUND_DIR . "/not_deposited", "0");
 			busy_hangup();
 			exit;
 		}
 		else {
 			$AGI->verbose("connecting to " . $dialed . " (inserted "
 				. $inserted . " cents)", 1);
-		$AGI->stream_file("thank-you", "0");
-		$AGI->stream_file(SOUND_DIR . "/crossbar_connect_sound", "0");
-		$AGI->stream_file(SOUND_DIR . "/trunk_signal_mf", "0");
+		$AGI->say_phonetic("thank-you", "0");
+		$AGI->exec("PLAYBACK",SOUND_DIR . "/crossbar_connect_sound", "0");
+		$AGI->exec("PLAYBACK",SOUND_DIR . "/trunk_signal_mf", "0");
 			dial($dialed);
 		}
 		exit;
@@ -136,7 +136,7 @@ while (1) {
 		$AGI->verbose("timed out waiting for coins or digits", 1);
 
 		if ($dialed ne "") {
-			$AGI->stream_file(SOUND_DIR . "/invalid_number", "0");
+			$AGI->exec("PLAYBACK",SOUND_DIR . "/invalid_number", "0");
 		}
 
 		busy_hangup();
@@ -147,17 +147,17 @@ while (1) {
 sub dial {
 	my ($number) = @_;
 
-	$AGI->stream_file(SOUND_DIR . "/crossbar_connect_sound", "0");
+	$AGI->exec("PLAYBACK",SOUND_DIR . "/crossbar_connect_sound", "0");
 	$AGI->set_context(OUTBOUND_CONTEXT);
 	$AGI->set_extension($dialed);
 	$AGI->exec("Goto", "1");
 }
 
 sub busy_hangup {
-	$AGI->stream_file(SOUND_DIR . "/crossbar_connect_sound", "0");
-	$AGI->stream_file(SOUND_DIR . "/mod_busy", "0");
-	$AGI->stream_file(SOUND_DIR . "/mod_busy", "0");
-	$AGI->stream_file(SOUND_DIR . "/crossbar_connect_sound", "0");
+	$AGI->exec("PLAYBACK",SOUND_DIR . "/crossbar_connect_sound", "0");
+	$AGI->exec("PLAYBACK",SOUND_DIR . "/mod_busy", "0");
+	$AGI->exec("PLAYBACK",SOUND_DIR . "/mod_busy", "0");
+	$AGI->exec("PLAYBACK",SOUND_DIR . "/crossbar_connect_sound", "0");
 	$AGI->set_extension("6200");
 	$AGI->exec("Goto", "1");
 }
@@ -168,35 +168,35 @@ sub play_wait_for_coin {
 		if ($AGI->say_number($remaining, "\$") == ord('$')) {
 			$inserted += 5;
 		} else {
-		if ($AGI->stream_file("cents-please", "\$") == ord('$')) {
+		if ($AGI->exec("PLAYBACK","cents-please", "\$") == ord('$')) {
 			$inserted += 5;
 		} else {
-		if ($AGI->stream_file(SOUND_DIR . "/ACTS_Silence", "\$") == ord('$')) {
+		if ($AGI->exec("PLAYBACK",SOUND_DIR . "/ACTS_Silence", "\$") == ord('$')) {
 			$inserted += 5;
 		} else {
-		if ($AGI->stream_file("please-deposit", "\$") == ord('$')) {
+		if ($AGI->exec("PLAYBACK","please-deposit", "\$") == ord('$')) {
 			$inserted += 5;
 		} else {
 		$remaining = CALL_CENTS - $inserted;
 		if ($AGI->say_number($remaining, "\$") == ord('$')) {
 			$inserted += 5;
 		} else {
-		if ($AGI->stream_file("cents", "\$") == ord('$')) {
+		if ($AGI->exec("PLAYBACK","cents", "\$") == ord('$')) {
                		$inserted += 5;
 		} else {
-		if ($AGI->stream_file("for-the-first", "\$") == ord('$')) {
+		if ($AGI->exec("PLAYBACK","for-the-first", "\$") == ord('$')) {
                		$inserted += 5;
 		} else {
 		if ($AGI->say_number(3, "\$") == ord('$')) {
        			$inserted += 5;
 		} else {
-		if ($AGI->stream_file("minutes", "\$") == ord('$')) {
+		if ($AGI->exec("PLAYBACK","minutes", "\$") == ord('$')) {
        			$inserted += 5;
 		} } } } } } } }
 	}
 	
 	if ($inserted >= CALL_CENTS) {
-		$AGI->stream_file("thank-you", "0");
+		$AGI->exec("PLAYBACK","thank-you", "0");
 		dial($dialed);
 		return 1;
 	} else {
@@ -223,7 +223,7 @@ sub wait_for_coins {
 
 
 			if ($inserted >= CALL_CENTS) {
-				$AGI->stream_file("thank-you", "0");
+				$AGI->exec("PLAYBACK","thank-you", "0");
 				dial($dialed);
 				return 1;
 			}
